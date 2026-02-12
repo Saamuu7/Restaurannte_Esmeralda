@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, AlertCircle } from "lucide-react";
+import { Check, AlertCircle, Loader2 } from "lucide-react";
 import Layout from "@/components/Layout";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ReservationForm {
   nombre: string;
@@ -23,13 +25,15 @@ const Reservas = () => {
   });
   const [errors, setErrors] = useState<Partial<ReservationForm>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
   const today = new Date().toISOString().split("T")[0];
 
   const validate = (): boolean => {
     const e: Partial<ReservationForm> = {};
-    if (!form.nombre.trim()) e.nombre = "Nombre obligatorio";
-    if (!form.apellidos.trim()) e.apellidos = "Apellidos obligatorios";
+    if (!form.nombre.trim() || form.nombre.length > 100) e.nombre = "Nombre obligatorio (máx. 100 caracteres)";
+    if (!form.apellidos.trim() || form.apellidos.length > 100) e.apellidos = "Apellidos obligatorios (máx. 100 caracteres)";
     if (!/^[0-9]{9}$/.test(form.telefono.replace(/\s/g, "")))
       e.telefono = "Teléfono inválido (9 dígitos)";
     if (!form.fecha) e.fecha = "Seleccione una fecha";
@@ -41,10 +45,42 @@ const Reservas = () => {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validate()) {
-      setSubmitted(true);
+    if (!validate()) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("reservations").insert({
+        nombre: form.nombre.trim(),
+        apellidos: form.apellidos.trim(),
+        telefono: form.telefono.replace(/\s/g, ""),
+        fecha: form.fecha,
+        hora: form.hora,
+        personas: parseInt(form.personas),
+      });
+
+      if (error) {
+        if (error.code === "23505") {
+          toast({
+            title: "Reserva duplicada",
+            description: "Ya existe una reserva con estos mismos datos.",
+            variant: "destructive",
+          });
+        } else {
+          throw error;
+        }
+      } else {
+        setSubmitted(true);
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "No se pudo enviar la reserva. Inténtelo de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -123,10 +159,10 @@ const Reservas = () => {
             noValidate
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FieldInput label="Nombre" value={form.nombre} error={errors.nombre} onChange={(v) => handleChange("nombre", v)} placeholder="Tu nombre" />
-              <FieldInput label="Apellidos" value={form.apellidos} error={errors.apellidos} onChange={(v) => handleChange("apellidos", v)} placeholder="Tus apellidos" />
+              <FieldInput label="Nombre" value={form.nombre} error={errors.nombre} onChange={(v) => handleChange("nombre", v)} placeholder="Tu nombre" maxLength={100} />
+              <FieldInput label="Apellidos" value={form.apellidos} error={errors.apellidos} onChange={(v) => handleChange("apellidos", v)} placeholder="Tus apellidos" maxLength={100} />
             </div>
-            <FieldInput label="Teléfono" value={form.telefono} error={errors.telefono} onChange={(v) => handleChange("telefono", v)} placeholder="600 000 000" type="tel" />
+            <FieldInput label="Teléfono" value={form.telefono} error={errors.telefono} onChange={(v) => handleChange("telefono", v)} placeholder="600 000 000" type="tel" maxLength={15} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FieldInput label="Fecha" value={form.fecha} error={errors.fecha} onChange={(v) => handleChange("fecha", v)} type="date" min={today} />
               <div>
@@ -163,9 +199,11 @@ const Reservas = () => {
 
             <button
               type="submit"
-              className="w-full py-4 bg-accent text-accent-foreground font-semibold tracking-wider uppercase text-sm rounded-sm transition-all duration-300 hover:glow-gold mt-4"
+              disabled={loading}
+              className="w-full py-4 bg-accent text-accent-foreground font-semibold tracking-wider uppercase text-sm rounded-sm transition-all duration-300 hover:glow-gold mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              Enviar Reserva
+              {loading && <Loader2 size={16} className="animate-spin" />}
+              {loading ? "Enviando..." : "Enviar Reserva"}
             </button>
           </motion.form>
         </div>
@@ -175,10 +213,10 @@ const Reservas = () => {
 };
 
 const FieldInput = ({
-  label, value, error, onChange, placeholder = "", type = "text", min,
+  label, value, error, onChange, placeholder = "", type = "text", min, maxLength,
 }: {
   label: string; value: string; error?: string; onChange: (v: string) => void;
-  placeholder?: string; type?: string; min?: string;
+  placeholder?: string; type?: string; min?: string; maxLength?: number;
 }) => (
   <div>
     <label className="block text-sm text-muted-foreground mb-2 tracking-wider uppercase">{label}</label>
@@ -188,6 +226,7 @@ const FieldInput = ({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       min={min}
+      maxLength={maxLength}
       className="w-full bg-muted border border-border text-foreground rounded-sm px-4 py-3 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-accent transition-colors"
     />
     {error && <ErrorMsg msg={error} />}

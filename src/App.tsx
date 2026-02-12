@@ -7,6 +7,8 @@ import Index from "./pages/Index";
 import Carta from "./pages/Carta";
 import Reservas from "./pages/Reservas";
 import Contacto from "./pages/Contacto";
+import AdminLogin from "./pages/AdminLogin";
+import AdminReservas from "./pages/AdminReservas";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +24,8 @@ const App = () => (
           <Route path="/carta" element={<Carta />} />
           <Route path="/reservas" element={<Reservas />} />
           <Route path="/contacto" element={<Contacto />} />
+          <Route path="/admin-login" element={<AdminLogin />} />
+          <Route path="/admin-reservas" element={<AdminReservas />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
